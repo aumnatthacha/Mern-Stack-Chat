@@ -5,7 +5,11 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const mongoose = require('mongoose');
 const cookieParser = require("cookie-parser");
-const User = require("./models/User")
+const User = require("./models/User");
+const Message = require("./models/Message");
+const ws = require("ws");
+const fs = require("fs");
+
 
 
 dotenv.config();
@@ -91,6 +95,96 @@ app.get('/profile', (req, res) => {
 
 //Run Server
 const PORT = process.env.PORT
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log("Server is running on http://localhost:" + PORT);
+});
+
+//Web Socket Server
+const wss = new ws.WebSocketServer({ server });
+
+wss.on('connection', (connection, req) => {
+  const notifyAboutOnlinePeople = () => {
+    [...wss.clients].forEach((client) => {
+      client.send(
+        JSON.stringify({
+          online: [...wss.clients].map((c) => ({
+            userId: c.userId,
+            username: c.username,
+          })),
+        })
+      );
+    });
+  };
+  connection.timer = setInterval(() => {
+    connection.ping();
+    connection.deadTimer = setTimeout(() => {
+      connection.isAlive = false
+      clearInterval(connection.timer);
+      connection.terminate();
+      notifyAboutOnlinePeople();
+      console.log('dead');
+    }, 1000);
+  }, 5000);
+  connection.on('pong', () => {
+    clearTimeout(connection.deadTimer);
+  });
+
+  //read username and id from cookie for this connection
+
+  const cookies = req.headers.cookie;
+  if (cookies) {
+    const tokenCookieString = cookies.split(';').find((str) => str.startsWith('token='))
+    if (tokenCookieString) {
+      //การทำงานของฟังก์ชันสตริง
+      const token = tokenCookieString.split('=')[1];
+      if (token) {
+        jwt.verify(token, secret, {}, (err, userData) => {
+          if (err) throw err;
+          const { userId, username } = userData;
+          connection.userId = userId;
+          connection.username = username;
+        })
+      }
+    }
+  }
+
+  connection.on("message", async (message) => {
+    const messageData = JSON.parse(message.toString());
+    const { recipient, sender, text, file } = messageData;
+    let filename = null;
+    if (file) {
+      const parts = file.name.split('.');
+      const ext = parts[parts.length - 1];
+      filename = Date.now() + "." + ext;
+      const path = __dirname + "/uploads/" + filename;
+      const bufferData = new Buffer(file.data.split(",")[1], "base64");
+      fs.writeFile(path, bufferData, () => {
+        console.log('file saved: ' + path);
+      });
+    }
+    if (recipient && (text || file)) {
+      const messageDoc = await Message.create({
+        sender: connection.userId,
+        recipient,
+        text,
+        file: file ? filename : null
+      });
+      [...wss.clients]
+        .filter((c) => c.userId === recipient)
+        .forEach((c) =>
+          c.send(
+            JSON.stringify({
+              text,
+              file: file ? filename : null,
+              recipient,
+              sender: connection.userId,
+              _id: messageData._id,
+            })
+          )
+        );
+    }
+  });
+
+
+  notifyAboutOnlinePeople();
 });
