@@ -1,3 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable no-undef */
+/* eslint-disable react-hooks/rules-of-hooks */
 /* eslint-disable react/jsx-no-undef */
 /* eslint-disable no-unused-vars */
 import { useState, useEffect, useRef, useContext } from "react";
@@ -7,24 +10,90 @@ import Logo from "./Logo";
 import Contact from "./Contact";
 
 const Chat = () => {
+    const [ws, setWs] = useState(null)
+    const [onlinePeople, setOnlinePeople] = useState({});
+    const [offlinePeople, setOfflinePeople] = useState({});
+    const [selectedUserId, setSelectedUserId] = useState(null);
+    const [message, setMessage] = useState([]);
+    const { username, id, setUsername } = useContext(UserContext);
+
+    useEffect(() => {
+        connectToWs();
+    }, [selectedUserId]);
+    const connectToWs = () => {
+        const ws = new WebSocket("ws://localhost:4000");
+        setWs(ws);
+        ws.addEventListener('message', handleMessage);
+        ws.addEventListener('close', () => {
+            setTimeout(() => {
+                console.log('Disconnected. Trying to reconnect.');
+                connectToWs();
+            }, 1000);
+        })
+    };
+
+    const handleMessage = (e) => {
+        const messageData = JSON.parse(e.data);
+        if ('online' in messageData) {
+            showOnlinePeople(messageData.online)
+        } else if ('text' in messageData) {
+            if (messageData.sender === setSelectedUserId) {
+                setMessage((prev) => [...prev, { ...messageData }]);
+            }
+        }
+    };
+
+    const showOnlinePeople = (peopleArray) => {
+        const people = {};
+        peopleArray.forEach(({ userId, username }) => {
+            people[userId] = username;
+        })
+        setOnlinePeople(people);
+    }
+
+    useEffect(() => {
+        axios.get("/people").then(res => {
+            const offlinePeopleArr = res.data.filter(p => p._id != id)
+                .filter(p => !Object.keys(onlinePeople).includes(p._id))
+            const offlinePeople = {};
+            offlinePeopleArr.forEach(p => {
+                offlinePeopleArr[p._id] = p;
+            });
+            setOfflinePeople(offlinePeople)
+        });
+    }, [onlinePeople])
+
+    const onlinePeopleExclOurUser = { ...onlinePeople };
+    delete onlinePeopleExclOurUser[id];
+
     return (
         <div className="flex h-screen">
             <div className="bg-black w-1/3 flex flex-col">
                 <div className="flex-grow">
                     <Logo />
-                    <Contact
-                        username={"user1"}
-                        id={'65a87a3f953941ba83dd70e5'}
-                        online={true}
-                        selected={true}
-                    />
-                    <Contact
-                        username={"user2"}
-                        id={'65a8a01d8b4a55e73beb5d4a'}
-                        online={false}
-                        selected={false}
-                    />
-                    
+                    {Object.keys(onlinePeopleExclOurUser).map((userId) => (
+                        <Contact
+                            key={userId}
+                            username={onlinePeopleExclOurUser[userId]}
+                            id={'userId'}
+                            online={true}
+                            selected={userId === selectedUserId}
+                            onClick={() => {
+                                setSelectedUserId(userId)
+                                console.log({userId})
+                            }}
+                        />
+                    ))}
+                    {Object.keys(offlinePeople).map((userId) => (
+                        <Contact
+                            key={userId}
+                            username={offlinePeople[userId].username}
+                            id={'userId'}
+                            online={false}
+                            selected={userId === setSelectedUserId}
+                            onClick={() => {setSelectedUserId(userId)}}
+                        />
+                    ))}
                 </div>
                 <div className="p-2 text-center flex items-center justify-center">
                     <span className="mr-2 text-sm text-white flex items-center">
@@ -72,7 +141,5 @@ const Chat = () => {
     )
 
 };
-
-
 
 export default Chat;
