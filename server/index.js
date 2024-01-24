@@ -9,6 +9,8 @@ const User = require("./models/User");
 const Message = require("./models/Message");
 const ws = require("ws");
 const fs = require("fs");
+const { resolve } = require("path");
+const { rejects } = require("assert");
 
 
 
@@ -99,6 +101,31 @@ app.get("/people", async (req, res) => {
   res.json(users);
 })
 
+//
+const getUserDataFromRequest = (req) => {
+  return new Promise((resolve, reject) => {
+    const token = req.cookies?.token;
+    if (token) {
+      jwt.verify(token, secret, {}, (err, userData) => {
+        if (err) throw err;
+        resolve(userData);
+      });
+    } else {
+      reject('no token');
+    }
+  });
+};
+
+app.get("/message/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const userData = await getUserDataFromRequest(req);
+  const ourUserId = userData.userId;
+  const message = await Message.find({
+    sender: { $in: [userId, ourUserId] },
+    recipient: { $in: [userId, ourUserId] },
+  }).sort({ createAt: 1 });
+  res.json(message);
+});
 
 //Run Server
 const PORT = process.env.PORT
@@ -164,8 +191,8 @@ wss.on('connection', (connection, req) => {
       const ext = parts[parts.length - 1];
       filename = Date.now() + "." + ext;
       const path = __dirname + "/uploads/" + filename;
-      const bufferData = new Buffer(file.data.split(",")[1], "base64");
-      fs.writeFile(path, bufferData, () => {
+      // const bufferData = new Buffer(file.data.split(",")[1], "base64");
+      fs.writeFile(path, file.data.split(",")[1], "base64", () => {
         console.log('file saved: ' + path);
       });
     }
