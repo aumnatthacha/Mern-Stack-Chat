@@ -15,7 +15,7 @@ const Chat = () => {
     const [offlinePeople, setOfflinePeople] = useState({});
     const [selectedUserId, setSelectedUserId] = useState(null);
     const [message, setMessage] = useState([]);
-    const { username, id, setUsername } = useContext(UserContext);
+    const { username, id, setUsername, setId } = useContext(UserContext);
 
     useEffect(() => {
         connectToWs();
@@ -57,11 +57,19 @@ const Chat = () => {
                 .filter(p => !Object.keys(onlinePeople).includes(p._id))
             const offlinePeople = {};
             offlinePeopleArr.forEach(p => {
-                offlinePeopleArr[p._id] = p;
+                offlinePeople[p._id] = p;
             });
             setOfflinePeople(offlinePeople)
         });
     }, [onlinePeople])
+
+    const logout = () => {
+        axios.post("/logout").then(()=>{
+            setWs(null);
+            setId(null);
+            setUsername(null);
+        });
+    };
 
     const onlinePeopleExclOurUser = { ...onlinePeople };
     delete onlinePeopleExclOurUser[id];
@@ -102,7 +110,9 @@ const Chat = () => {
                         </svg>
                         Username
                     </span>
-                    <button className="text-sm bg-blue-100 py-1 px-2 text-gray-500 border rounded-sm">
+                    <button className="text-sm bg-blue-100 py-1 px-2 text-gray-500 border rounded-sm"
+                    onClick={logout}
+                    >
                         Logout
                     </button>
                 </div>

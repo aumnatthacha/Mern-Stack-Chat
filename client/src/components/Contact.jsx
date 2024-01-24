@@ -4,7 +4,7 @@
 import React from 'react'
 import Avatar from './Avatar';
 
-const Contact = ({ username, id, online, selected }) => {
+const Contact = ({ username, id, online, selected,onClick }) => {
   return (
     <div
       onClick={() => onClick(id)}
