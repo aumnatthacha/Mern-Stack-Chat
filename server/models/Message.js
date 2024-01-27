@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 const messageSchema = new mongoose.Schema(
    {
-        text: String,
-        file: String,
+        text: [String],
+        file: [String],
         sender: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         recipient: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     },
